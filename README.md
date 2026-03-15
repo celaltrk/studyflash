@@ -2,6 +2,8 @@
 
 An internal MVP support platform that ingests incoming support emails, structures them into actionable tickets, enriches them with internal context, and assists the team with AI-powered triage and responses.
 
+![Architecture Diagram](excalidraw.png)
+
 ---
 
 ## Table of Contents
