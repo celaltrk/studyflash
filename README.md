@@ -351,9 +351,3 @@ Conversation thread entries linked to tickets.
 - Service role (backend) has full access for admin operations
 
 ---
-
-
-**Trade-off**: A slow AI call could theoretically block other requests. Mitigated by Python's async/await — AI calls are non-blocking I/O.
-
----
-
