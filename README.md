@@ -9,17 +9,13 @@ An internal MVP support platform that ingests incoming support emails, structure
 - [Overview](#overview)
 - [Features](#features)
 - [Tech Stack & Rationale](#tech-stack--rationale)
-- [Architecture](#architecture)
+- [Project Structure](#project-structure)
 - [Setup Instructions](#setup-instructions)
 - [Usage Guide](#usage-guide)
-- [API Reference](#api-reference)
 - [AI Pipeline](#ai-pipeline)
 - [Outlook Integration](#outlook-integration)
 - [Enrichment Pipeline](#enrichment-pipeline)
 - [Database Schema](#database-schema)
-- [Design Decisions & Trade-offs](#design-decisions--trade-offs)
-- [What I Decided Against](#what-i-decided-against)
-- [Future Improvements](#future-improvements)
 
 ---
 
