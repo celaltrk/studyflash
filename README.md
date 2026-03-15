@@ -62,36 +62,7 @@ Studyflash receives thousands of multilingual support requests per month. This M
 
 ---
 
-## Architecture
-
-### High-Level Flow
-
-```
-┌─────────────┐     ┌──────────────────────────────┐     ┌────────────────┐
-│   Outlook    │────▶│  Email Sync Service (15s)     │────▶│   Supabase DB  │
-│   Mailbox    │◀────│  (Background polling loop)    │     │  (PostgreSQL)  │
-└─────────────┘     └──────────────────────────────┘     └───────┬────────┘
-                                                                 │
-                    ┌──────────────────────────────┐             │
-                    │       FastAPI Backend         │◀────────────┘
-                    │  • Auth (JWT via Supabase)    │
-                    │  • Ticket CRUD + filters      │
-                    │  • AI pipeline (Claude)       │
-                    │  • Enrichment (Sentry/PH/DB)  │
-                    │  • Outlook send (Graph API)   │
-                    └──────────────┬───────────────┘
-                                   │
-                    ┌──────────────▼───────────────┐
-                    │     Vue 3 Frontend (SPA)      │
-                    │  • Dashboard + Stats          │
-                    │  • Ticket list + detail        │
-                    │  • Team management             │
-                    │  • AI actions (categorize,     │
-                    │    draft, translate, enrich)   │
-                    └──────────────────────────────┘
-```
-
-### Project Structure
+## Project Structure
 
 ```
 studyflash/
@@ -181,27 +152,7 @@ Edit `backend/.env`:
 
 > **Note**: Without Microsoft credentials, the platform runs a **mock Outlook service** that simulates incoming emails in batches — useful for demonstrating the sync flow.
 
-### Step 3a: Run Locally (Development)
-
-**Backend:**
-```bash
-cd backend
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
-```
-
-**Frontend** (in a separate terminal):
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Open **http://localhost:5173** and sign in.
-
-### Step 3b: Run with Docker
+### Step 3: Run with Docker
 
 ```bash
 # Ensure .env is configured (step 2) and migration is run (step 1)
@@ -257,56 +208,6 @@ On first startup, the backend automatically:
 
 ---
 
-## API Reference
-
-All endpoints are prefixed with `/api`. Authentication is via `Authorization: Bearer <jwt_token>` header.
-
-### Auth
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/auth/login` | Sign in with email/password → returns JWT + user info |
-| `GET` | `/auth/me` | Get current authenticated user from token |
-
-### Tickets
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/tickets` | List tickets with pagination, filtering (status, category, assignee, search), sorting |
-| `GET` | `/tickets/stats` | Dashboard statistics (counts, avg confidence, category breakdown) |
-| `GET` | `/tickets/{id}` | Single ticket with all messages and assignee info |
-| `PATCH` | `/tickets/{id}` | Update status, priority, category, assignee, tags |
-| `POST` | `/tickets/{id}/messages` | Add reply message; auto-sends to Outlook if ticket is email-linked |
-
-### AI
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/ai/categorize/{id}` | Classify ticket → category, confidence, summary, suggested assignee role |
-| `POST` | `/ai/draft/{id}` | Generate response draft in customer's language |
-| `POST` | `/ai/translate/{id}` | Translate ticket body to English |
-| `POST` | `/ai/translate-text` | Translate arbitrary text to English |
-| `POST` | `/ai/enrich/{id}` | Fetch Sentry issues, PostHog recording, user metadata |
-| `POST` | `/ai/batch-categorize` | Categorize all uncategorized tickets in one call |
-
-### Users
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/users` | List all user profiles (filterable by role) |
-| `GET` | `/users/me` | Current user's profile |
-| `GET` | `/users/{id}` | Specific user profile |
-| `POST` | `/users` | Create new user — admin only (creates Supabase Auth account + profile) |
-| `PATCH` | `/users/{id}` | Update user profile |
-| `POST` | `/users/auto-assign` | Auto-assign ticket to least-loaded user of the suggested role |
-
-### Team & Outlook
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/team` | List active team members |
-| `POST` | `/outlook/sync` | Manually trigger email sync |
-| `GET` | `/health` | Health check |
-
-Interactive docs available at **http://localhost:8000/docs** (Swagger UI).
-
----
-
 ## AI Pipeline
 
 The AI system has two operating modes, ensuring the platform works with or without an Anthropic API key.
@@ -339,26 +240,6 @@ This means the recommended workflow is: **Enrich → Categorize → Draft** — 
 - Output: plain English text (no JSON wrapping)
 - Temperature: 0.1 (minimal creativity for translation accuracy)
 - Skips if text is already in English
-
-### Mode 2: Heuristic Fallback (no API key)
-
-**Categorization**: Multilingual keyword matching across 17 category keyword maps (e.g., "Rückerstattung" → refund_request, "Karteikarten" → flashcard_issues). Confidence: `min(0.3 + keyword_count × 0.15, 0.8)`.
-
-**Draft Response**: Language-aware templates for common categories (refund, cancellation) in DE/FR/EN. Generic professional template for others. Confidence: 0.5.
-
-**Translation**: Not available without API key (returns null gracefully).
-
-### Assignment Rules
-
-Category-to-role mapping for auto-assignment:
-
-| Categories | Assigned Role |
-|-----------|--------------|
-| refund_request, subscription_*, billing_invoice | Billing |
-| technical_errors, data_loss | Engineering |
-| flashcard_issues, quiz_issues, content_upload, account_issues, and others | Support |
-
-Auto-assign picks the **least-loaded** member of the target role (respecting `max_open_tickets` capacity).
 
 ---
 
@@ -471,54 +352,6 @@ Conversation thread entries linked to tickets.
 
 ---
 
-## Design Decisions & Trade-offs
-
-### 1. Supabase Over Self-Hosted PostgreSQL
-**Decision**: Use Supabase as a managed backend-as-a-service instead of raw PostgreSQL + custom auth.
-
-**Why**: Supabase gives us PostgreSQL + Auth + RLS + REST API in one managed service. This eliminated the need to build JWT infrastructure, connection pooling (PgBouncer), user management endpoints, and password hashing. The `service_role` key lets the backend bypass RLS for admin operations while the RLS policies protect data at the database level.
-
-**Trade-off**: Vendor lock-in to Supabase's API conventions. Mitigated by using standard SQL for the schema — migration to raw Postgres would only require replacing `supabase-py` calls with an ORM.
-
-### 2. No ORM — Direct Supabase Client
-**Decision**: Use `supabase-py` (PostgREST) directly instead of SQLAlchemy/Prisma.
-
-**Why**: The PostgREST client handles filtering, pagination, and joins declaratively. Adding an ORM would mean maintaining two data layers (ORM models + Supabase client) for no benefit. The `db_service.py` module provides a clean function-based abstraction over all queries.
-
-**Trade-off**: No type-safe query building, no automatic migrations. Acceptable for an MVP with a stable schema.
-
-### 3. Claude Sonnet with Heuristic Fallback
-**Decision**: Default to working without an API key; Claude enhances but isn't required.
-
-**Why**: An MVP that requires an API key to function is fragile. The heuristic fallback (keyword matching + templates) ensures the platform is usable immediately. When Claude is available, it provides significantly better multilingual categorization and natural-sounding responses.
-
-**Trade-off**: Heuristic accuracy is lower (~60–70% vs Claude's ~90%+), and template responses are generic. But the platform is always functional.
-
-### 4. Background Polling Over Webhooks for Outlook
-**Decision**: Poll the mailbox every 15 seconds instead of using Microsoft Graph webhooks (subscription notifications).
-
-**Why**: Webhooks require a publicly accessible HTTPS endpoint with a valid SSL certificate, plus webhook lifecycle management (creation, renewal every 3 days, validation). For an MVP running on localhost, polling is simpler and equally effective.
-
-**Trade-off**: 15-second delay on incoming emails (vs near-instant with webhooks), and wasted API calls when no new email exists. Both are acceptable for an internal tool.
-
-### 5. Mock Enrichment Services
-**Decision**: Mock Sentry, PostHog, and user DB lookups instead of requiring real credentials.
-
-**Why**: The enrichment UI and data flow are fully functional — the only difference is where the data comes from. Requiring three additional API keys would make setup prohibitive for evaluation. The mock implementations return realistic data structures that match what the real APIs would provide.
-
-**Trade-off**: Can't demonstrate real enrichment data. The mock code documents the exact API calls and query patterns needed for production.
-
-### 6. Vue 3 Over React/Next.js
-**Decision**: Vue 3 with composition API and plain CSS.
-
-**Why**: Vue's single-file components (template + script + style) are self-contained and readable. The composition API provides React-like reactivity without JSX. For an internal tool with 6 views, Vue's lower boilerplate (no `useState`/`useEffect` ceremony) speeds up development.
-
-**Trade-off**: Smaller ecosystem than React. Not a concern for an internal tool with no complex state management needs.
-
-### 7. Monolithic Backend Over Microservices
-**Decision**: Single FastAPI process handles API routes, AI calls, email sync, and enrichment.
-
-**Why**: Microservices add deployment complexity (service discovery, inter-service auth, distributed tracing) without benefit at this scale. The background email sync runs as an asyncio task within the same process. FastAPI's async architecture handles concurrent requests efficiently.
 
 **Trade-off**: A slow AI call could theoretically block other requests. Mitigated by Python's async/await — AI calls are non-blocking I/O.
 
