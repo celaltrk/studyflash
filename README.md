@@ -212,8 +212,6 @@ On first startup, the backend automatically:
 
 The AI system has two operating modes, ensuring the platform works with or without an Anthropic API key.
 
-### Mode 1: Claude-Powered (with `ANTHROPIC_API_KEY`)
-
 Uses **Claude Sonnet** (claude-sonnet-4-20250514) via the Anthropic API with YAML-configured prompts.
 
 **Categorization** (`prompts/categorize.yaml`):
